@@ -24,13 +24,16 @@ type Layer struct {
 
 func NewLayer(inputSize int, neuronsCount int) Layer {
 	neurons := make([]Neuron, neuronsCount)
+	// Xavier/Glorot initialization for better gradient flow
+	scale := math.Sqrt(2.0 / float64(inputSize))
+
 	for i := range neurons {
 		weights := make([]float64, inputSize)
 		weightGrads := make([]float64, inputSize)
 		for j := range weights {
-			weights[j] = randFloat64(-0.5, 0.5)
+			weights[j] = randFloat64(-scale, scale)
 		}
-		neurons[i] = Neuron{weights: weights, bias: randFloat64(-0.5, 0.5), weightGrads: weightGrads, biasGrad: 0.0}
+		neurons[i] = Neuron{weights: weights, bias: 0.0, weightGrads: weightGrads, biasGrad: 0.0}
 	}
 
 	return Layer{neurons: neurons}
@@ -152,41 +155,66 @@ func main() {
 	// Initialize random seed
 	rand.Seed(time.Now().UnixNano())
 
-	inputs := readFile("./mnist_png/training/1/1002.png")
-
 	layer1 := NewLayer(784, 16)
 	layer2 := NewLayer(16, 16)
 	outputLayer := NewLayer(16, 10)
 
-	initialLearningRate := 0.1
+	initialLearningRate := 0.01
+	batchSize := 32
+	epochs := 1000
 
-	for epoch := 0; epoch < 1000; epoch++ {
-		out1 := layer1.Forward(inputs)
-		out2 := layer2.Forward(out1)
-		final := outputLayer.Forward(out2)
-
-		label := 1
-		probs := Softmax(final)
-		loss := CrossEntropyLoss(probs, label)
-
-		dL_dZ := make([]float64, len(probs))
-		for i := range probs {
-			dL_dZ[i] = probs[i]
+	for epoch := 0; epoch < epochs; epoch++ {
+		// Get a batch of training data
+		batch, err := getBatch(batchSize, "./mnist_png/training")
+		if err != nil {
+			fmt.Printf("Error loading batch: %v\n", err)
+			continue
 		}
-		dL_dZ[label] -= 1.0 // Subtract 1 from the true class
 
-		gradOut := outputLayer.Backward(dL_dZ)
-		gradOut = layer2.Backward(gradOut)
-		gradOut = layer1.Backward(gradOut)
+		totalLoss := 0.0
 
 		// Learning rate decay
 		learningRate := initialLearningRate / (1.0 + float64(epoch)*0.001)
 
-		layer1.UpdateWeights(learningRate)
-		layer2.UpdateWeights(learningRate)
-		outputLayer.UpdateWeights(learningRate)
+		// Process each image in the batch
+		for i := 0; i < len(batch.Images); i++ {
+			inputs := batch.Images[i]
+			label := batch.Labels[i]
 
-		fmt.Println("Epoch:", epoch, "Loss:", loss)
+			// Forward pass
+			out1 := layer1.Forward(inputs)
+			out2 := layer2.Forward(out1)
+			final := outputLayer.Forward(out2)
+
+			// Calculate loss
+			probs := Softmax(final)
+			loss := CrossEntropyLoss(probs, label)
+			totalLoss += loss
+
+			// Backward pass
+			dL_dZ := make([]float64, len(probs))
+			for j := range probs {
+				dL_dZ[j] = probs[j]
+			}
+			dL_dZ[label] -= 1.0 // Subtract 1 from the true class
+
+			gradOut := outputLayer.Backward(dL_dZ)
+			gradOut = layer2.Backward(gradOut)
+			_ = layer1.Backward(gradOut) // Use _ to avoid ineffectual assignment warning
+
+			// Update weights immediately after each sample (SGD)
+			layer1.UpdateWeights(learningRate)
+			layer2.UpdateWeights(learningRate)
+			outputLayer.UpdateWeights(learningRate)
+		}
+
+		// Calculate average loss for the batch
+		avgLoss := totalLoss / float64(batchSize)
+
+		// Print progress every 10 epochs
+		if epoch%10 == 0 {
+			fmt.Printf("Epoch: %d, Average Loss: %.4f, Learning Rate: %.6f\n", epoch, avgLoss, learningRate)
+		}
 	}
 	fmt.Println("Training complete")
 
