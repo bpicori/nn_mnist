@@ -73,7 +73,7 @@ func (l *Layer) Backward(dLoss_Output []float64) []float64 {
 
 		for j := range neuron.Weights {
 			gradW := dLoss_dZ * neuron.Input[j] // calculate gradient for weight
-			// as we are using batches, we accumulate the gradient 
+			// as we are using batches, we accumulate the gradient
 			// so then we can average it and update the weights with the average gradient
 			neuron.WeightGrads[j] += gradW
 			dLoss_Inputs[j] += dLoss_dZ * neuron.Weights[j]
@@ -135,10 +135,9 @@ func TrainModel() {
 
 	for epoch := 0; epoch < epochs; epoch++ {
 		// Get a batch of training data
-		batch, err := getBatch(batchSize, "./mnist_png/training")
+		batch, err := GetBatch(batchSize, "./mnist-pngs/train")
 		if err != nil {
-			fmt.Printf("Error loading batch: %v\n", err)
-			continue
+			panic(err)
 		}
 
 		totalLoss := 0.0
@@ -244,7 +243,7 @@ func TestModel() {
 	fmt.Println("Testing model on random images from test dataset...")
 
 	// Test with random images from the test set
-	testBatch, err := getBatch(500, "./mnist_png/test")
+	testBatch, err := GetBatch(500, "./mnist_png/test")
 	if err != nil {
 		fmt.Printf("Error loading test batch: %v\n", err)
 		return

@@ -3,22 +3,26 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"os"
 	"path/filepath"
 	"strconv"
 )
 
 type BatchData struct {
-	Images [][]float64 // Each image is a slice of float64 (784 pixels for 28x28 images)
-	Labels []int       // Corresponding labels for each image
+	Images [][]float64
+	Labels []int
 }
 
-// getBatch loads a batch of images from the MNIST dataset
-// batchSize: number of images to load
-// dataPath: path to the training data directory (e.g., "./mnist_png/training")
-func getBatch(batchSize int, dataPath string) (*BatchData, error) {
+// GetBatch loads a batch of images from the MNIST dataset
+func GetBatch(batchSize int, dataPath string) (*BatchData, error) {
 	batch := &BatchData{
 		Images: make([][]float64, 0, batchSize),
 		Labels: make([]int, 0, batchSize),
+	}
+
+	// validate data path
+	if _, err := os.Stat(dataPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("data path %s does not exist", dataPath)
 	}
 
 	// Get all digit directories (0-9)
