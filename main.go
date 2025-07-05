@@ -1,25 +1,34 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
+	"os"
 	"time"
 )
 
 type Neuron struct {
-	weights     []float64
-	bias        float64
-	weightGrads []float64
-	biasGrad    float64
-	input       []float64
-	output      float64
+	Weights     []float64 `json:"weights"`
+	Bias        float64   `json:"bias"`
+	WeightGrads []float64 `json:"weight_grads"`
+	BiasGrad    float64   `json:"bias_grad"`
+	Input       []float64 `json:"input"`
+	Output      float64   `json:"output"`
 }
 
 type Layer struct {
-	neurons []Neuron
-	inputs  []float64
-	outputs []float64
+	Neurons []Neuron  `json:"neurons"`
+	Inputs  []float64 `json:"inputs"`
+	Outputs []float64 `json:"outputs"`
+}
+
+// Model represents the entire neural network
+type Model struct {
+	Layer1      Layer `json:"layer1"`
+	Layer2      Layer `json:"layer2"`
+	OutputLayer Layer `json:"output_layer"`
 }
 
 func NewLayer(inputSize int, neuronsCount int) Layer {
@@ -33,10 +42,10 @@ func NewLayer(inputSize int, neuronsCount int) Layer {
 		for j := range weights {
 			weights[j] = randFloat64(-scale, scale)
 		}
-		neurons[i] = Neuron{weights: weights, bias: 0.0, weightGrads: weightGrads, biasGrad: 0.0}
+		neurons[i] = Neuron{Weights: weights, Bias: 0.0, WeightGrads: weightGrads, BiasGrad: 0.0}
 	}
 
-	return Layer{neurons: neurons}
+	return Layer{Neurons: neurons}
 }
 
 func ReLu(x float64) float64 {
@@ -88,70 +97,124 @@ func CrossEntropyLoss(probs []float64, label int) float64 {
 }
 
 func (l *Layer) Forward(inputs []float64) []float64 {
-	l.inputs = inputs
-	outputs := make([]float64, len(l.neurons))
+	l.Inputs = inputs
+	outputs := make([]float64, len(l.Neurons))
 
-	for i, neuron := range l.neurons {
+	for i, neuron := range l.Neurons {
 		// res = w1 * x1 + w2 * x2 + ... + wN * xN + b
-		sum := neuron.bias
-		for j, w := range neuron.weights {
+		sum := neuron.Bias
+		for j, w := range neuron.Weights {
 			sum += w * inputs[j]
 		}
 		output := ReLu(sum) // apply activation function
 		outputs[i] = output
 
 		// Store the pre-activation value for backpropagation
-		l.neurons[i].output = sum // Store pre-activation value
-		l.neurons[i].input = inputs
+		l.Neurons[i].Output = sum // Store pre-activation value
+		l.Neurons[i].Input = inputs
 	}
 
-	l.outputs = outputs
+	l.Outputs = outputs
 	return outputs
 }
 
 func (l *Layer) Backward(dLoss_Output []float64) []float64 {
-	dLoss_Inputs := make([]float64, len(l.inputs))
+	dLoss_Inputs := make([]float64, len(l.Inputs))
 
-	for i, neuron := range l.neurons {
+	for i, neuron := range l.Neurons {
 		dReLU := 0.0
-		if neuron.output > 0 {
+		if neuron.Output > 0 {
 			dReLU = 1.0
 		}
 		dLoss_dZ := dLoss_Output[i] * dReLU
 
-		for j := range neuron.weights {
+		for j := range neuron.Weights {
 			// Ensure j is within bounds of input
-			if j < len(neuron.input) {
-				gradW := dLoss_dZ * neuron.input[j]
-				neuron.weightGrads[j] += gradW
+			if j < len(neuron.Input) {
+				gradW := dLoss_dZ * neuron.Input[j]
+				neuron.WeightGrads[j] += gradW
 
 				// Ensure j is within bounds of dLoss_Inputs
 				if j < len(dLoss_Inputs) {
-					dLoss_Inputs[j] += dLoss_dZ * neuron.weights[j]
+					dLoss_Inputs[j] += dLoss_dZ * neuron.Weights[j]
 				}
 			}
 		}
 
-		neuron.biasGrad += dLoss_dZ
-		l.neurons[i] = neuron
+		neuron.BiasGrad += dLoss_dZ
+		l.Neurons[i] = neuron
 	}
 
 	return dLoss_Inputs
 }
 
 func (l *Layer) UpdateWeights(learningRate float64) {
-	for i, neuron := range l.neurons {
-		for j := range neuron.weights {
-			neuron.weights[j] -= learningRate * neuron.weightGrads[j]
-			neuron.weightGrads[j] = 0 // Reset gradient after update
+	for i, neuron := range l.Neurons {
+		for j := range neuron.Weights {
+			neuron.Weights[j] -= learningRate * neuron.WeightGrads[j]
+			neuron.WeightGrads[j] = 0 // Reset gradient after update
 		}
-		neuron.bias -= learningRate * neuron.biasGrad
-		neuron.biasGrad = 0 // Reset bias gradient
-		l.neurons[i] = neuron
+		neuron.Bias -= learningRate * neuron.BiasGrad
+		neuron.BiasGrad = 0 // Reset bias gradient
+		l.Neurons[i] = neuron
 	}
 }
 
-func main() {
+// SaveModel saves the trained model to a JSON file
+func (m *Model) SaveModel(filename string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(m)
+}
+
+// LoadModel loads a trained model from a JSON file
+func LoadModel(filename string) (*Model, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var model Model
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&model)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model, nil
+}
+
+// Predict performs inference on a single image
+func (m *Model) Predict(imageData []float64) (int, []float64) {
+	// Forward pass through the network
+	out1 := m.Layer1.Forward(imageData)
+	out2 := m.Layer2.Forward(out1)
+	final := m.OutputLayer.Forward(out2)
+
+	// Apply softmax to get probabilities
+	probs := Softmax(final)
+
+	// Find the class with highest probability
+	maxProb := 0.0
+	predictedClass := 0
+	for i, prob := range probs {
+		if prob > maxProb {
+			maxProb = prob
+			predictedClass = i
+		}
+	}
+
+	return predictedClass, probs
+}
+
+func trainModel() {
 	// Initialize random seed
 	rand.Seed(time.Now().UnixNano())
 
@@ -160,7 +223,7 @@ func main() {
 	outputLayer := NewLayer(16, 10)
 
 	initialLearningRate := 0.01
-	batchSize := 32
+	batchSize := 64
 	epochs := 1000
 
 	for epoch := 0; epoch < epochs; epoch++ {
@@ -218,4 +281,75 @@ func main() {
 	}
 	fmt.Println("Training complete")
 
+	// Save the trained model
+	model := &Model{
+		Layer1:      layer1,
+		Layer2:      layer2,
+		OutputLayer: outputLayer,
+	}
+
+	err := model.SaveModel("trained_model.json")
+	if err != nil {
+		fmt.Printf("Error saving model: %v\n", err)
+	} else {
+		fmt.Println("Model saved to trained_model.json")
+	}
+}
+
+func predictImage(imagePath string) {
+	// Check if image file exists
+	if _, err := os.Stat(imagePath); os.IsNotExist(err) {
+		fmt.Printf("Error: Image file '%s' does not exist\n", imagePath)
+		return
+	}
+
+	// Load the trained model
+	model, err := LoadModel("trained_model.json")
+	if err != nil {
+		fmt.Printf("Error loading model: %v\n", err)
+		fmt.Println("Make sure you have trained the model first by running: go run . train")
+		return
+	}
+
+	// Load and process the image
+	imageData := readFile(imagePath)
+
+	// Make prediction
+	predictedClass, probabilities := model.Predict(imageData)
+
+	// Display results
+	fmt.Printf("Image: %s\n", imagePath)
+	fmt.Printf("Predicted digit: %d\n", predictedClass)
+	fmt.Printf("Confidence: %.2f%%\n", probabilities[predictedClass]*100)
+	fmt.Println("\nAll probabilities:")
+	for i, prob := range probabilities {
+		fmt.Printf("  Digit %d: %.4f (%.2f%%)\n", i, prob, prob*100)
+	}
+}
+
+func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("Usage:")
+		fmt.Println("  go run . train                    - Train the model")
+		fmt.Println("  go run . predict <image_path>     - Predict digit from image")
+		return
+	}
+
+	command := os.Args[1]
+
+	switch command {
+	case "train":
+		trainModel()
+	case "predict":
+		if len(os.Args) < 3 {
+			fmt.Println("Error: Please provide an image path")
+			fmt.Println("Usage: go run . predict <image_path>")
+			return
+		}
+		imagePath := os.Args[2]
+		predictImage(imagePath)
+	default:
+		fmt.Printf("Unknown command: %s\n", command)
+		fmt.Println("Available commands: train, predict")
+	}
 }
