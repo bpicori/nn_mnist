@@ -2,10 +2,7 @@ package main
 
 import (
 	"fmt"
-	"image/png"
 	"math"
-	"math/rand/v2"
-	"os"
 )
 
 type Neuron struct {
@@ -22,11 +19,6 @@ type Layer struct {
 	inputs  []float64
 	outputs []float64
 }
-
-func randFloat64(min, max float64) float64 {
-	return min + (max-min)*rand.Float64()
-}
-
 func NewLayer(inputSize int, neuronsCount int) Layer {
 	neurons := make([]Neuron, neuronsCount)
 	for i := range neurons {
@@ -47,7 +39,7 @@ func ReLu(x float64) float64 {
 	return x
 }
 
-// Softmax function
+// Softmax function - activation function for the output layer
 // for each x in x = exp(x) / sum(exp(x))
 func Softmax(outputScores []float64) []float64 {
 	// Find the maximum logit for numerical stability.
@@ -83,6 +75,7 @@ func Softmax(outputScores []float64) []float64 {
 	return exps
 }
 
+// Loss function
 func CrossEntropyLoss(probs []float64, label int) float64 {
 	return -math.Log(probs[label] + 1e-15) // add small epsilon to avoid log(0)
 }
@@ -92,6 +85,7 @@ func (l *Layer) Forward(inputs []float64) []float64 {
 	outputs := make([]float64, len(l.neurons))
 
 	for i, neuron := range l.neurons {
+		// res = w1 * x1 + w2 * x2 + ... + wN * xN + b
 		sum := neuron.bias
 		for j, w := range neuron.weights {
 			sum += w * inputs[j]
@@ -107,53 +101,27 @@ func (l *Layer) Forward(inputs []float64) []float64 {
 	return outputs
 }
 
-
-
 func main() {
 	inputs := readFile("./mnist_png/training/1/1002.png")
 
-	layer1 := NewLayer(784, 128)
-	layer2 := NewLayer(128, 16)
+	layer1 := NewLayer(784, 16)
+	layer2 := NewLayer(16, 16)
 	outputLayer := NewLayer(16, 10)
 
-	out1 := layer1.Forward(inputs)
-	out2 := layer2.Forward(out1)
-	final := outputLayer.Forward(out2)
+	for epoch := 0; epoch < 1000; epoch++ {
+		out1 := layer1.Forward(inputs)
+		out2 := layer2.Forward(out1)
+		final := outputLayer.Forward(out2)
 
-	label := 1
-	probs := Softmax(final)
-	loss := CrossEntropyLoss(probs, label)
+		label := 1
+		probs := Softmax(final)
+		loss := CrossEntropyLoss(probs, label)
 
-	fmt.Println("Predicted probabilities:", probs)
-	fmt.Println("Loss:", loss)
-}
-
-func readFile(path string) []float64 {
-	f, err := os.Open(path)
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
-
-	img, err := png.Decode(f)
-	if err != nil {
-		panic(err)
-	}
-
-	bounds := img.Bounds()
-	result := []float64{}
-
-	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			r, g, b, _ := img.At(x, y).RGBA() // In GO, RGBA returns 16-bit values, so we need to convert it to 8-bit to get the actual color for each channel
-
-			// We need to convert every pixel to gray-scale. This is a standard formula to covert RGB to gray-scale
-			gray := 0.299*float64(r>>8) + 0.587*float64(g>>8) + 0.114*float64(b>>8)
-			normalized := gray / 255.0
-
-			result = append(result, normalized)
+		if epoch%10 == 0 {
+			fmt.Println("Epoch:", epoch, "Loss:", loss)
 		}
 	}
+	fmt.Println("Training complete")
 
-	return result
 }
+
