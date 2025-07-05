@@ -47,7 +47,7 @@ func getBatch(batchSize int, dataPath string) (*BatchData, error) {
 		selectedFile := files[rand.Intn(len(files))]
 
 		// Load the image
-		imageData := readFile(selectedFile)
+		imageData := ReadImage(selectedFile)
 
 		// Add to batch
 		batch.Images = append(batch.Images, imageData)

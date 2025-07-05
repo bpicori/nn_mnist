@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
@@ -24,13 +23,6 @@ type Layer struct {
 	Outputs []float64 `json:"outputs"`
 }
 
-// Model represents the entire neural network
-type Model struct {
-	Layer1      Layer `json:"layer1"`
-	Layer2      Layer `json:"layer2"`
-	OutputLayer Layer `json:"output_layer"`
-}
-
 func NewLayer(inputSize int, neuronsCount int) Layer {
 	neurons := make([]Neuron, neuronsCount)
 	// Xavier/Glorot initialization for better gradient flow
@@ -40,60 +32,12 @@ func NewLayer(inputSize int, neuronsCount int) Layer {
 		weights := make([]float64, inputSize)
 		weightGrads := make([]float64, inputSize)
 		for j := range weights {
-			weights[j] = randFloat64(-scale, scale)
+			weights[j] = RandomFloat64(-scale, scale)
 		}
 		neurons[i] = Neuron{Weights: weights, Bias: 0.0, WeightGrads: weightGrads, BiasGrad: 0.0}
 	}
 
 	return Layer{Neurons: neurons}
-}
-
-func ReLu(x float64) float64 {
-	if x < 0 {
-		return 0
-	}
-	return x
-}
-
-// Softmax function - activation function for the output layer
-// for each x in x = exp(x) / sum(exp(x))
-func Softmax(outputScores []float64) []float64 {
-	// Find the maximum logit for numerical stability.
-	// This is needed because exp(z_i) grows very large, and can overflow for big logits.
-	// By subtracting outputScore from each z_i, we shift the largest value to 0
-	// and the rest become negative, which prevents overflow but keeps the ratios the same.
-	// Example:
-	// logits = [2.0, 1.0, 1000.0]
-	// outputScore = 1000.0
-	// shifted logits = [-998, -999, 0]
-	// exp(0) = 1
-	// exp(-998) and exp(-999) are ~0
-	// so softmax still works correctly without overflow.
-	outputScore := outputScores[0]
-	for _, v := range outputScores {
-		if v > outputScore {
-			outputScore = v
-		}
-	}
-
-	expSum := 0.0
-	exps := make([]float64, len(outputScores))
-	for i, v := range outputScores {
-		e := math.Exp(v - outputScore)
-		exps[i] = e
-		expSum += e
-	}
-
-	for i := range exps {
-		exps[i] /= expSum
-	}
-
-	return exps
-}
-
-// Loss function
-func CrossEntropyLoss(probs []float64, label int) float64 {
-	return -math.Log(probs[label] + 1e-15) // add small epsilon to avoid log(0)
 }
 
 func (l *Layer) Forward(inputs []float64) []float64 {
@@ -109,7 +53,6 @@ func (l *Layer) Forward(inputs []float64) []float64 {
 		output := ReLu(sum) // apply activation function
 		outputs[i] = output
 
-		// Store the pre-activation value for backpropagation
 		l.Neurons[i].Output = sum // Store pre-activation value
 		l.Neurons[i].Input = inputs
 	}
@@ -129,19 +72,14 @@ func (l *Layer) Backward(dLoss_Output []float64) []float64 {
 		dLoss_dZ := dLoss_Output[i] * dReLU
 
 		for j := range neuron.Weights {
-			// Ensure j is within bounds of input
-			if j < len(neuron.Input) {
-				gradW := dLoss_dZ * neuron.Input[j]
-				neuron.WeightGrads[j] += gradW
-
-				// Ensure j is within bounds of dLoss_Inputs
-				if j < len(dLoss_Inputs) {
-					dLoss_Inputs[j] += dLoss_dZ * neuron.Weights[j]
-				}
-			}
+			gradW := dLoss_dZ * neuron.Input[j] // calculate gradient for weight
+			// as we are using batches, we accumulate the gradient 
+			// so then we can average it and update the weights with the average gradient
+			neuron.WeightGrads[j] += gradW
+			dLoss_Inputs[j] += dLoss_dZ * neuron.Weights[j]
 		}
 
-		neuron.BiasGrad += dLoss_dZ
+		neuron.BiasGrad += dLoss_dZ // see comment above
 		l.Neurons[i] = neuron
 	}
 
@@ -160,43 +98,12 @@ func (l *Layer) UpdateWeights(learningRate float64) {
 	}
 }
 
-// SaveModel saves the trained model to a JSON file
-func (m *Model) SaveModel(filename string) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(m)
-}
-
-// LoadModel loads a trained model from a JSON file
-func LoadModel(filename string) (*Model, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	var model Model
-	decoder := json.NewDecoder(file)
-	err = decoder.Decode(&model)
-	if err != nil {
-		return nil, err
-	}
-
-	return &model, nil
-}
-
 // Predict performs inference on a single image
-func (m *Model) Predict(imageData []float64) (int, []float64) {
+func Predict(model *Model, imageData []float64) (int, []float64) {
 	// Forward pass through the network
-	out1 := m.Layer1.Forward(imageData)
-	out2 := m.Layer2.Forward(out1)
-	final := m.OutputLayer.Forward(out2)
+	out1 := model.Layer1.Forward(imageData)
+	out2 := model.Layer2.Forward(out1)
+	final := model.OutputLayer.Forward(out2)
 
 	// Apply softmax to get probabilities
 	probs := Softmax(final)
@@ -214,7 +121,7 @@ func (m *Model) Predict(imageData []float64) (int, []float64) {
 	return predictedClass, probs
 }
 
-func trainModel() {
+func TrainModel() {
 	// Initialize random seed
 	rand.Seed(time.Now().UnixNano())
 
@@ -256,9 +163,7 @@ func trainModel() {
 
 			// Backward pass
 			dL_dZ := make([]float64, len(probs))
-			for j := range probs {
-				dL_dZ[j] = probs[j]
-			}
+			copy(dL_dZ, probs)
 			dL_dZ[label] -= 1.0 // Subtract 1 from the true class
 
 			gradOut := outputLayer.Backward(dL_dZ)
@@ -296,7 +201,7 @@ func trainModel() {
 	}
 }
 
-func predictImage(imagePath string) {
+func PredictSingleImage(imagePath string) {
 	// Check if image file exists
 	if _, err := os.Stat(imagePath); os.IsNotExist(err) {
 		fmt.Printf("Error: Image file '%s' does not exist\n", imagePath)
@@ -312,10 +217,10 @@ func predictImage(imagePath string) {
 	}
 
 	// Load and process the image
-	imageData := readFile(imagePath)
+	imageData := ReadImage(imagePath)
 
 	// Make prediction
-	predictedClass, probabilities := model.Predict(imageData)
+	predictedClass, probabilities := Predict(model, imageData)
 
 	// Display results
 	fmt.Printf("Image: %s\n", imagePath)
@@ -327,7 +232,7 @@ func predictImage(imagePath string) {
 	}
 }
 
-func testModel() {
+func TestModel() {
 	// Load the trained model
 	model, err := LoadModel("trained_model.json")
 	if err != nil {
@@ -359,7 +264,7 @@ func testModel() {
 		actualLabel := testBatch.Labels[i]
 
 		// Make prediction
-		predictedClass, probabilities := model.Predict(imageData)
+		predictedClass, probabilities := Predict(model, imageData)
 
 		// Update statistics
 		digitTotal[actualLabel]++
@@ -411,7 +316,7 @@ func main() {
 
 	switch command {
 	case "train":
-		trainModel()
+		TrainModel()
 	case "predict":
 		if len(os.Args) < 3 {
 			fmt.Println("Error: Please provide an image path")
@@ -419,9 +324,9 @@ func main() {
 			return
 		}
 		imagePath := os.Args[2]
-		predictImage(imagePath)
+		PredictSingleImage(imagePath)
 	case "test":
-		testModel()
+		TestModel()
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
 		fmt.Println("Available commands: train, predict, test")
