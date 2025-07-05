@@ -218,12 +218,12 @@ func trainModel() {
 	// Initialize random seed
 	rand.Seed(time.Now().UnixNano())
 
-	layer1 := NewLayer(784, 16)
-	layer2 := NewLayer(16, 16)
-	outputLayer := NewLayer(16, 10)
+	layer1 := NewLayer(784, 128)
+	layer2 := NewLayer(128, 128)
+	outputLayer := NewLayer(128, 10)
 
 	initialLearningRate := 0.01
-	batchSize := 64
+	batchSize := 128
 	epochs := 1000
 
 	for epoch := 0; epoch < epochs; epoch++ {
@@ -339,7 +339,7 @@ func testModel() {
 	fmt.Println("Testing model on random images from test dataset...")
 
 	// Test with random images from the test set
-	testBatch, err := getBatch(100, "./mnist_png/test")
+	testBatch, err := getBatch(500, "./mnist_png/test")
 	if err != nil {
 		fmt.Printf("Error loading test batch: %v\n", err)
 		return
