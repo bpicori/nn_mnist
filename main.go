@@ -223,7 +223,7 @@ func trainModel() {
 	outputLayer := NewLayer(128, 10)
 
 	initialLearningRate := 0.01
-	batchSize := 128
+	batchSize := 1000
 	epochs := 1000
 
 	for epoch := 0; epoch < epochs; epoch++ {
@@ -401,9 +401,9 @@ func testModel() {
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("Usage:")
-		fmt.Println("  go run . train                    - Train the model")
-		fmt.Println("  go run . predict <image_path>     - Predict digit from image")
-		fmt.Println("  go run . test                     - Test model accuracy on random test images")
+		fmt.Println("  nn_mnist train                    - Train the model")
+		fmt.Println("  nn_mnist predict <image_path>     - Predict digit from image")
+		fmt.Println("  nn_mnist test                     - Test model accuracy on random test images")
 		return
 	}
 
