@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"math"
+	"math/rand"
+	"time"
 )
 
 type Neuron struct {
@@ -19,14 +21,16 @@ type Layer struct {
 	inputs  []float64
 	outputs []float64
 }
+
 func NewLayer(inputSize int, neuronsCount int) Layer {
 	neurons := make([]Neuron, neuronsCount)
 	for i := range neurons {
 		weights := make([]float64, inputSize)
+		weightGrads := make([]float64, inputSize)
 		for j := range weights {
 			weights[j] = randFloat64(-0.5, 0.5)
 		}
-		neurons[i] = Neuron{weights: weights, bias: randFloat64(-0.5, 0.5)}
+		neurons[i] = Neuron{weights: weights, bias: randFloat64(-0.5, 0.5), weightGrads: weightGrads, biasGrad: 0.0}
 	}
 
 	return Layer{neurons: neurons}
@@ -93,7 +97,8 @@ func (l *Layer) Forward(inputs []float64) []float64 {
 		output := ReLu(sum) // apply activation function
 		outputs[i] = output
 
-		l.neurons[i].output = outputs[i]
+		// Store the pre-activation value for backpropagation
+		l.neurons[i].output = sum // Store pre-activation value
 		l.neurons[i].input = inputs
 	}
 
@@ -101,12 +106,59 @@ func (l *Layer) Forward(inputs []float64) []float64 {
 	return outputs
 }
 
+func (l *Layer) Backward(dLoss_Output []float64) []float64 {
+	dLoss_Inputs := make([]float64, len(l.inputs))
+
+	for i, neuron := range l.neurons {
+		dReLU := 0.0
+		if neuron.output > 0 {
+			dReLU = 1.0
+		}
+		dLoss_dZ := dLoss_Output[i] * dReLU
+
+		for j := range neuron.weights {
+			// Ensure j is within bounds of input
+			if j < len(neuron.input) {
+				gradW := dLoss_dZ * neuron.input[j]
+				neuron.weightGrads[j] += gradW
+
+				// Ensure j is within bounds of dLoss_Inputs
+				if j < len(dLoss_Inputs) {
+					dLoss_Inputs[j] += dLoss_dZ * neuron.weights[j]
+				}
+			}
+		}
+
+		neuron.biasGrad += dLoss_dZ
+		l.neurons[i] = neuron
+	}
+
+	return dLoss_Inputs
+}
+
+func (l *Layer) UpdateWeights(learningRate float64) {
+	for i, neuron := range l.neurons {
+		for j := range neuron.weights {
+			neuron.weights[j] -= learningRate * neuron.weightGrads[j]
+			neuron.weightGrads[j] = 0 // Reset gradient after update
+		}
+		neuron.bias -= learningRate * neuron.biasGrad
+		neuron.biasGrad = 0 // Reset bias gradient
+		l.neurons[i] = neuron
+	}
+}
+
 func main() {
+	// Initialize random seed
+	rand.Seed(time.Now().UnixNano())
+
 	inputs := readFile("./mnist_png/training/1/1002.png")
 
 	layer1 := NewLayer(784, 16)
 	layer2 := NewLayer(16, 16)
 	outputLayer := NewLayer(16, 10)
+
+	initialLearningRate := 0.1
 
 	for epoch := 0; epoch < 1000; epoch++ {
 		out1 := layer1.Forward(inputs)
@@ -117,11 +169,25 @@ func main() {
 		probs := Softmax(final)
 		loss := CrossEntropyLoss(probs, label)
 
-		if epoch%10 == 0 {
-			fmt.Println("Epoch:", epoch, "Loss:", loss)
+		dL_dZ := make([]float64, len(probs))
+		for i := range probs {
+			dL_dZ[i] = probs[i]
 		}
+		dL_dZ[label] -= 1.0 // Subtract 1 from the true class
+
+		gradOut := outputLayer.Backward(dL_dZ)
+		gradOut = layer2.Backward(gradOut)
+		gradOut = layer1.Backward(gradOut)
+
+		// Learning rate decay
+		learningRate := initialLearningRate / (1.0 + float64(epoch)*0.001)
+
+		layer1.UpdateWeights(learningRate)
+		layer2.UpdateWeights(learningRate)
+		outputLayer.UpdateWeights(learningRate)
+
+		fmt.Println("Epoch:", epoch, "Loss:", loss)
 	}
 	fmt.Println("Training complete")
 
 }
-
