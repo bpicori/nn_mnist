@@ -327,11 +327,83 @@ func predictImage(imagePath string) {
 	}
 }
 
+func testModel() {
+	// Load the trained model
+	model, err := LoadModel("trained_model.json")
+	if err != nil {
+		fmt.Printf("Error loading model: %v\n", err)
+		fmt.Println("Make sure you have trained the model first by running: go run . train")
+		return
+	}
+
+	fmt.Println("Testing model on random images from test dataset...")
+
+	// Test with random images from the test set
+	testBatch, err := getBatch(100, "./mnist_png/test")
+	if err != nil {
+		fmt.Printf("Error loading test batch: %v\n", err)
+		return
+	}
+
+	correct := 0
+	total := len(testBatch.Images)
+
+	// Track per-digit accuracy
+	digitCorrect := make([]int, 10)
+	digitTotal := make([]int, 10)
+
+	fmt.Printf("Testing on %d random images...\n\n", total)
+
+	for i := 0; i < total; i++ {
+		imageData := testBatch.Images[i]
+		actualLabel := testBatch.Labels[i]
+
+		// Make prediction
+		predictedClass, probabilities := model.Predict(imageData)
+
+		// Update statistics
+		digitTotal[actualLabel]++
+		if predictedClass == actualLabel {
+			correct++
+			digitCorrect[actualLabel]++
+		}
+
+		// Show first 10 predictions as examples
+		if i < 10 {
+			fmt.Printf("Test %d: Actual=%d, Predicted=%d, Confidence=%.2f%% %s\n",
+				i+1, actualLabel, predictedClass, probabilities[predictedClass]*100,
+				func() string {
+					if predictedClass == actualLabel {
+						return "✓"
+					}
+					return "✗"
+				}())
+		}
+	}
+
+	// Calculate and display overall accuracy
+	accuracy := float64(correct) / float64(total) * 100
+	fmt.Printf("\n=== Test Results ===\n")
+	fmt.Printf("Overall Accuracy: %d/%d (%.2f%%)\n", correct, total, accuracy)
+
+	// Display per-digit accuracy
+	fmt.Println("\nPer-digit accuracy:")
+	for digit := 0; digit < 10; digit++ {
+		if digitTotal[digit] > 0 {
+			digitAccuracy := float64(digitCorrect[digit]) / float64(digitTotal[digit]) * 100
+			fmt.Printf("  Digit %d: %d/%d (%.2f%%)\n", digit, digitCorrect[digit], digitTotal[digit], digitAccuracy)
+		} else {
+			fmt.Printf("  Digit %d: No test samples\n", digit)
+		}
+	}
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("Usage:")
 		fmt.Println("  go run . train                    - Train the model")
 		fmt.Println("  go run . predict <image_path>     - Predict digit from image")
+		fmt.Println("  go run . test                     - Test model accuracy on random test images")
 		return
 	}
 
@@ -348,8 +420,10 @@ func main() {
 		}
 		imagePath := os.Args[2]
 		predictImage(imagePath)
+	case "test":
+		testModel()
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
-		fmt.Println("Available commands: train, predict")
+		fmt.Println("Available commands: train, predict, test")
 	}
 }

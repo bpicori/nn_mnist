@@ -36,13 +36,27 @@ go run . predict <path_to_image>
 
 Example:
 ```bash
-go run . predict ./mnist_png/testing/5/10.png
+go run . predict ./mnist_png/test/5/10.png
 ```
 
 This will:
 - Load the trained model from `trained_model.json`
 - Process the input image
 - Display the predicted digit and confidence scores for all classes
+
+### Testing Model Accuracy
+
+To test the model's accuracy on random images from the test dataset:
+
+```bash
+go run . test
+```
+
+This will:
+- Load the trained model from `trained_model.json`
+- Test on 100 random images from the `mnist_png/test` directory
+- Display overall accuracy and per-digit accuracy statistics
+- Show the first 10 predictions as examples
 
 ## Requirements
 
@@ -54,7 +68,7 @@ This will:
   │   ├── 0/
   │   ├── 1/
   │   └── ... (digits 0-9)
-  └── testing/
+  └── test/
       ├── 0/
       ├── 1/
       └── ... (digits 0-9)
@@ -96,6 +110,26 @@ All probabilities:
   Digit 7: 0.0234 (2.34%)
   Digit 8: 0.0089 (0.89%)
   Digit 9: 0.0051 (0.51%)
+```
+
+### Model Testing
+```
+Testing model on random images from test dataset...
+Testing on 100 random images...
+
+Test 1: Actual=7, Predicted=7, Confidence=99.98% ✓
+Test 2: Actual=3, Predicted=3, Confidence=51.36% ✓
+Test 3: Actual=8, Predicted=8, Confidence=100.00% ✓
+...
+
+=== Test Results ===
+Overall Accuracy: 96/100 (96.00%)
+
+Per-digit accuracy:
+  Digit 0: 7/8 (87.50%)
+  Digit 1: 11/11 (100.00%)
+  Digit 2: 14/15 (93.33%)
+  ...
 ```
 
 ## Important Notes
