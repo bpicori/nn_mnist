@@ -1,6 +1,3 @@
-run:
-	go run *.go
-
 build:
 	go build -o nn_mnist *.go
 

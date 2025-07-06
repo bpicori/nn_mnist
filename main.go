@@ -243,7 +243,7 @@ func TestModel() {
 	fmt.Println("Testing model on random images from test dataset...")
 
 	// Test with random images from the test set
-	testBatch, err := GetBatch(500, "./mnist_png/test")
+	testBatch, err := GetBatch(500, "./mnist-pngs/test")
 	if err != nil {
 		fmt.Printf("Error loading test batch: %v\n", err)
 		return

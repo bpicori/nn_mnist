@@ -2,47 +2,72 @@
 
 A simple neural network implementation in Go for classifying handwritten digits from the MNIST dataset.
 
-## Features
+## Network Architecture (The Structure)
+Our network has a specific structure:
+- **Input Layer**: 784 neurons (28×28 pixel image flattened into a 1D array)
+- **Hidden Layer 1**: 128 neurons with ReLU activation
+- **Hidden Layer 2**: 128 neurons with ReLU activation
+- **Output Layer**: 10 neurons with Softmax activation (one for each digit 0-9)
 
-- 3-layer neural network (784 → 16 → 16 → 10)
-- ReLU activation for hidden layers
-- Softmax activation for output layer
-- Cross-entropy loss function
-- Model saving and loading functionality
-- Command-line interface for training and prediction
+### Activation Functions Used
+- **ReLU (Rectified Linear Unit)**: `f(x) = max(0, x)` 
+- **Softmax**: `f(x) = exp(x) / sum(exp(x))` 
+
+### Loss Function Used
+- **Cross-Entropy Loss**: `-log(p)` where `p` is the predicted probability of the correct class
+
+### Optimization Algorithm Used
+- **Stochastic Gradient Descent (SGD)**: Updates weights after each training sample
+
+
+### Forward Propagation Process
+This is how the network makes predictions:
+```
+Input (784 pixels) → Hidden Layer 1 (128 neurons) → Hidden Layer 2 (128 neurons) → Output (10 probabilities)
+```
+Each neuron calculates: `output = activation_function(sum(weights × inputs) + bias)`
+
+### Backpropagation Process
+- **Cross-Entropy Loss**: Measures how wrong our predictions are compared to the actual labels
+- **Backpropagation**: Uses calculus (chain rule) to calculate how much each weight contributed to the error, then adjusts weights to reduce future errors
+- **Gradient Descent**: The optimization algorithm that updates weights in the direction that reduces the loss
+
+### Training Flow 
+
+1. **Initialize**: Create random weights for all neurons
+2. **For each epoch (1000 times)**:
+   - Load a batch of 1000 random training images
+   - **For each image in the batch**:
+     - **Forward Pass**: Run the image through the network to get a prediction
+     - **Calculate Loss**: Compare prediction with actual label using cross-entropy
+     - **Backward Pass**: Calculate gradients (how much each weight should change)
+     - **Update Weights**: Adjust all weights using the calculated gradients
+3. **Save Model**: Store the trained weights to `trained_model.json`
 
 ## Usage
+
+### Download the MNIST Dataset
+```bash
+make download_dataset
+```
+It will download the dataset to `mnist-pngs` directory.
 
 ### Training the Model
 
 To train the neural network on the MNIST dataset:
 
 ```bash
-go run . train
+go build -o nn_mnist *.go && ./nn_mnist train
 ```
-
-This will:
-- Train the model for 1000 epochs
-- Display training progress every 10 epochs
-- Save the trained model to `trained_model.json`
 
 ### Making Predictions
 
 To predict the digit in a single image:
 
 ```bash
-go run . predict <path_to_image>
+./nn_mnist predict <path_to_image>
 ```
 
-Example:
-```bash
-go run . predict ./mnist_png/test/5/10.png
-```
-
-This will:
-- Load the trained model from `trained_model.json`
-- Process the input image
-- Display the predicted digit and confidence scores for all classes
 
 ### Testing Model Accuracy
 
@@ -52,89 +77,7 @@ To test the model's accuracy on random images from the test dataset:
 go run . test
 ```
 
-This will:
-- Load the trained model from `trained_model.json`
-- Test on 100 random images from the `mnist_png/test` directory
-- Display overall accuracy and per-digit accuracy statistics
-- Show the first 10 predictions as examples
-
-## Requirements
-
-- Go 1.16 or later
-- MNIST PNG dataset in the `mnist_png` directory structure:
-  ```
-  mnist_png/
-  ├── training/
-  │   ├── 0/
-  │   ├── 1/
-  │   └── ... (digits 0-9)
-  └── test/
-      ├── 0/
-      ├── 1/
-      └── ... (digits 0-9)
-  ```
-
-## Model Architecture
-
-- **Input Layer**: 784 neurons (28×28 pixel images, flattened)
-- **Hidden Layer 1**: 16 neurons with ReLU activation
-- **Hidden Layer 2**: 16 neurons with ReLU activation  
-- **Output Layer**: 10 neurons with Softmax activation (one for each digit 0-9)
-
-## Example Output
-
-### Training
-```
-Epoch: 0, Average Loss: 2.3026, Learning Rate: 0.010000
-Epoch: 10, Average Loss: 1.8234, Learning Rate: 0.009901
-Epoch: 20, Average Loss: 1.5432, Learning Rate: 0.009804
-...
-Training complete
-Model saved to trained_model.json
-```
-
-### Prediction
-```
-Image: ./mnist_png/training/5/1032.png
-Predicted digit: 5
-Confidence: 89.23%
-
-All probabilities:
-  Digit 0: 0.0012 (0.12%)
-  Digit 1: 0.0034 (0.34%)
-  Digit 2: 0.0089 (0.89%)
-  Digit 3: 0.0156 (1.56%)
-  Digit 4: 0.0234 (2.34%)
-  Digit 5: 0.8923 (89.23%)
-  Digit 6: 0.0178 (1.78%)
-  Digit 7: 0.0234 (2.34%)
-  Digit 8: 0.0089 (0.89%)
-  Digit 9: 0.0051 (0.51%)
-```
-
-### Model Testing
-```
-Testing model on random images from test dataset...
-Testing on 100 random images...
-
-Test 1: Actual=7, Predicted=7, Confidence=99.98% ✓
-Test 2: Actual=3, Predicted=3, Confidence=51.36% ✓
-Test 3: Actual=8, Predicted=8, Confidence=100.00% ✓
-...
-
-=== Test Results ===
-Overall Accuracy: 96/100 (96.00%)
-
-Per-digit accuracy:
-  Digit 0: 7/8 (87.50%)
-  Digit 1: 11/11 (100.00%)
-  Digit 2: 14/15 (93.33%)
-  ...
-```
-
-## Important Notes
-
-- **Model Training**: You must train the model first before making predictions. The trained model is saved as `trained_model.json`.
-- **Image Format**: Input images should be 28×28 pixel PNG files, similar to the MNIST dataset format.
-- **Model Accuracy**: The accuracy depends on the training duration. With 1000 epochs, the model should achieve reasonable accuracy for digit classification.
-- **Error Handling**: The program includes error handling for missing files and untrained models.
+## Resources
+- https://www.youtube.com/watch?v=VMj-3S1tku0&t=193s
+- https://www.youtube.com/watch?v=Ilg3gGewQ5U&t=339s
+- [MNIST in PNG Format](https://github.com/rasbt/mnist-pngs)
